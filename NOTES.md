@@ -87,6 +87,56 @@ that directly. `receive_trip.php` responds immediately and dispatches
 `notify.py` in the background so it never risks hitting the board's
 timeout.
 
+## Arm lead / disarm lag (added after first live install)
+
+`schedule_entry_active()` in `gfci_common.py` expands each schedule entry's
+window by `arm_lead_seconds` before `startTime` and `disarm_lag_seconds`
+after `endTime`, computed as full datetimes (not time-of-day arithmetic) so
+overnight shows and a lead pulling the window into the previous day both
+fall out of the same code path. Precision is bounded by
+`poll_interval_seconds`, since `relay_daemon.py` only re-evaluates the
+window on each poll.
+
+`callbacks.py`'s fast-path used to disarm immediately on a playlist "stop"
+event; that's now removed, since it would race `relay_daemon.py`'s
+lag-respecting disarm and cut it short. Arm-on-"start" is unaffected -
+lead time doesn't apply there anyway, since a "start" event fires after the
+show has already begun.
+
+## Settings page not persisting (found on first live install)
+
+First real install (via Plugin Manager, after the srcURL fix below) showed
+`content.php` accepting the form but not persisting `board_host` or
+`watched_playlists`. Two independent bugs, both fixed:
+
+1. `scripts/fpp_install.sh` created `config.json` under whatever user ran
+   the install (Plugin Manager needs root for the systemd unit), while
+   `content.php` writes as the FPP web server's user (normally `fpp`) - a
+   root-owned mode-644 file is readable but not writable by that user, so
+   `file_put_contents()` failed silently (return value was never checked).
+   Fixed by explicitly `chown fpp:fpp` + `chmod 664`-ing `config.json`,
+   `state.json`, `trips.json` at the end of install, and by having
+   `content.php` check the write's return value and surface a real error
+   instead of reporting success regardless.
+2. The playlist `<select>` was populated only from a live
+   `GET /api/playlists` call. If that call failed (e.g. `allow_url_fopen`
+   disabled, in which case `file_get_contents('http://...')` fails
+   silently), the list rendered with zero `<option>`s, so a previously
+   saved `watched_playlists` selection had nothing to render as "selected"
+   - it looked unsaved even when `config.json` was correct. Fixed by
+   fetching via curl (works regardless of `allow_url_fopen`) and by
+   unioning the live list with whatever's already in `config.json`, so a
+   saved selection is never invisible just because the live fetch failed.
+
+## Plugin Manager install (`srcURL`)
+
+The Plugin Manager's "paste a URL" install path does a real `git clone
+<srcURL> <branch>` (`install_plugin PLUGINNAME GITURL BRANCH SHA1`) even
+for a plugin that's normally installed manually - `pluginInfo.json`'s
+`srcURL`/`homeURL`/`bugURL` must point at a real, pushed remote or that
+clone fails outright (`ERROR: failed to clone plugin`). Filled in from this
+repo's actual `origin` remote.
+
 ## Verification checklist
 
 See the "Live-test checklist" section in [README.md](README.md) - nothing

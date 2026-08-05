@@ -24,6 +24,8 @@ DEFAULT_CONFIG = {
     "board_port": 80,
     "watched_playlists": [],
     "poll_interval_seconds": 30,
+    "arm_lead_seconds": 0,
+    "disarm_lag_seconds": 0,
     "http_timeout_seconds": 3,
     "notify": {
         "ntfy": {"enabled": False, "topic_url": ""},
@@ -174,41 +176,43 @@ def _parse_time(s):
     return datetime.datetime.strptime(s, "%H:%M:%S").time()
 
 
-def schedule_entry_active(entry, now, logger=None):
-    """Return True if this /api/schedule entry covers `now` (a datetime)."""
+def schedule_entry_active(entry, now, lead_seconds=0, lag_seconds=0, logger=None):
+    """Return True if this /api/schedule entry - expanded by arm_lead_seconds
+    before its start and disarm_lag_seconds after its end - covers `now`.
+
+    Works in full datetimes rather than time-of-day comparisons so a lead
+    time pulling the window into the previous day, an overnight show, and a
+    lag time pushing the window into the next day all fall out of the same
+    logic instead of needing separate special cases.
+    """
     try:
         if not entry.get("enabled"):
             return False
-        today = now.date()
         start_date = _parse_date(entry["startDate"])
         end_date = _parse_date(entry["endDate"])
-        if not (start_date <= today <= end_date):
-            return False
-
         start_t = _parse_time(entry["startTime"])
         end_t = _parse_time(entry["endTime"])
-        now_t = now.time()
         day_code = int(entry["day"])
-        today_wday = now.weekday()
-        yesterday = now - datetime.timedelta(days=1)
+        lead = datetime.timedelta(seconds=max(lead_seconds, 0))
+        lag = datetime.timedelta(seconds=max(lag_seconds, 0))
 
-        if end_t > start_t:
-            return (
-                _day_code_matches(day_code, today_wday, now.timetuple().tm_yday)
-                and start_t <= now_t < end_t
-            )
-        # Overnight window: active from start_t today through end_t tomorrow.
-        active_today_tail = (
-            _day_code_matches(day_code, today_wday, now.timetuple().tm_yday)
-            and now_t >= start_t
-        )
-        active_from_yesterday = (
-            _day_code_matches(
-                day_code, yesterday.weekday(), yesterday.timetuple().tm_yday
-            )
-            and now_t < end_t
-        )
-        return active_today_tail or active_from_yesterday
+        # The entry's day-code can anchor its occurrence on "yesterday" (an
+        # overnight show, or a lead time pulling the window earlier) as well
+        # as "today" - check both.
+        for anchor in (now.date() - datetime.timedelta(days=1), now.date()):
+            if not (start_date <= anchor <= end_date):
+                continue
+            if not _day_code_matches(
+                day_code, anchor.weekday(), anchor.timetuple().tm_yday
+            ):
+                continue
+            start_dt = datetime.datetime.combine(anchor, start_t)
+            end_dt = datetime.datetime.combine(anchor, end_t)
+            if end_dt <= start_dt:
+                end_dt += datetime.timedelta(days=1)  # overnight show
+            if (start_dt - lead) <= now < (end_dt + lag):
+                return True
+        return False
     except (KeyError, ValueError) as e:
         if logger:
             logger.warning("Skipping unparseable schedule entry %r: %s", entry, e)

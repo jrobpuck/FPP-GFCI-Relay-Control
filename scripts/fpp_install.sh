@@ -18,6 +18,17 @@ chmod +x "$PLUGINDIR"/relay_daemon.py "$PLUGINDIR"/callbacks.py "$PLUGINDIR"/not
 if [ ! -f "$PLUGINDIR/config.json" ]; then
     cp "$PLUGINDIR/config.example.json" "$PLUGINDIR/config.json"
 fi
+touch "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json"
+
+# This script may run as root (Plugin Manager needs root for the systemd
+# unit below), but content.php and receive_trip.php are written to by
+# whatever user runs FPP's web server - usually 'fpp', not root. A
+# root-owned, mode-644 config.json is readable but not writable by that
+# user, which makes the settings page look like it silently ignores every
+# save. Fix ownership/mode on the files those pages actually write to,
+# regardless of which user this install script itself ran as.
+chown fpp:fpp "$PLUGINDIR/config.json" "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json" 2>/dev/null || true
+chmod 664 "$PLUGINDIR/config.json" "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json"
 
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]

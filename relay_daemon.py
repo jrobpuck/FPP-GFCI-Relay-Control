@@ -39,11 +39,13 @@ def compute_desired_armed(cfg, logger):
         return None
 
     now = datetime.datetime.now()
+    lead = cfg.get("arm_lead_seconds", 0)
+    lag = cfg.get("disarm_lag_seconds", 0)
     for entry in schedule:
         playlist = entry.get("playlist", "")
         if not gc.playlist_matches(cfg, playlist):
             continue
-        if gc.schedule_entry_active(entry, now, logger):
+        if gc.schedule_entry_active(entry, now, lead, lag, logger):
             return True
     return False
 

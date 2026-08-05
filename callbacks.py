@@ -20,6 +20,14 @@ primary arm/disarm mechanism (it polls FPP's schedule independently and
 does not depend on this callback ever firing). If this script fails or is
 never invoked, relay_daemon.py still arms/disarms within one poll
 interval, so every code path here fails soft: log and exit 0.
+
+Only "start" arms early here - "stop" is intentionally left to
+relay_daemon.py alone. arm_lead_seconds doesn't apply to this callback (by
+the time a "start" event fires the show has already begun), but
+disarm_lag_seconds does: only the daemon's schedule-window check knows
+whether the configured lag means the relays should stay armed past this
+playlist's stop, so a callback-side disarm here would race it and cut the
+lag short.
 """
 import json
 import sys
@@ -38,17 +46,14 @@ def handle_playlist(logger, data_arg):
 
     action = data.get("Action", "")
     name = data.get("name", "")
-    if action not in ("start", "stop"):
-        return  # "playing" / "query_next" - not a state transition we care about
+    if action != "start":
+        return  # "stop" is relay_daemon.py's call (disarm_lag_seconds); see module docstring
 
     cfg = gc.load_config()
     if not gc.playlist_matches(cfg, name):
         return
 
-    if action == "start":
-        gc.arm_board(cfg, logger)
-    else:
-        gc.disarm_board(cfg, logger)
+    gc.arm_board(cfg, logger)
 
 
 def handle_lifecycle(logger, lifecycle):

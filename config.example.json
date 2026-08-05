@@ -4,6 +4,8 @@
     "board_port": 80,
     "watched_playlists": [],
     "poll_interval_seconds": 30,
+    "arm_lead_seconds": 0,
+    "disarm_lag_seconds": 0,
     "http_timeout_seconds": 3,
     "notify": {
         "ntfy": { "enabled": false, "topic_url": "" },
