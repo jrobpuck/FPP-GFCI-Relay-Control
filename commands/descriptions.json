@@ -1,0 +1,10 @@
+[
+{ "name": "GFCI Relay Control - Arm Relays",
+  "script": "arm.sh",
+  "args": []
+},
+{ "name": "GFCI Relay Control - Disarm Relays",
+  "script": "disarm.sh",
+  "args": []
+}
+]

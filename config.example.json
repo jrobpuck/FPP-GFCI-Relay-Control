@@ -1,0 +1,19 @@
+{
+    "fpp_host": "127.0.0.1",
+    "board_host": "",
+    "board_port": 80,
+    "watched_playlists": [],
+    "poll_interval_seconds": 30,
+    "http_timeout_seconds": 3,
+    "notify": {
+        "ntfy": { "enabled": false, "topic_url": "" },
+        "twilio": {
+            "enabled": false,
+            "account_sid": "",
+            "auth_token": "",
+            "from_number": "",
+            "to_number": ""
+        },
+        "pushover": { "enabled": false, "user_key": "", "app_token": "" }
+    }
+}

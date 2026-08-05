@@ -1,0 +1,14 @@
+{
+    "repoName": "gfci-relay-control",
+    "name": "GFCI Relay Control",
+    "author": "jrobpuck",
+    "description": "Arms/disarms an external GFCI relay board around FPP scheduled shows, monitors for GFCI trips, and sends SMS/push notifications.",
+    "homeURL": "",
+    "srcURL": "",
+    "bugURL": "",
+    "documentation": "https://github.com/jrobpuck/FPP-GFCI-Relay-Control/blob/main/README.md",
+    "_comment_manual_install": "This plugin is installed manually via install.sh, not through FPP's Plugin Manager, so the versions[]/branch/sha fields below are informational only and are never read by a git-clone install flow. Fill in homeURL/srcURL/bugURL once this repo has a real remote.",
+    "versions": [
+        { "minFPPVersion": "10.0", "maxFPPVersion": "0", "branch": "main", "sha": "" }
+    ]
+}
