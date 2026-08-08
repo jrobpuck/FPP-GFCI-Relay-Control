@@ -154,6 +154,20 @@ def fpp_get_json(cfg, path):
         return json.loads(resp.read().decode("utf-8"))
 
 
+def current_playlist_name(cfg):
+    """The playlist FPP is actually playing right now ("" if idle), via
+    GET /api/player/status. This is a real-time signal independent of
+    /api/schedule - it catches anything FPP is playing regardless of
+    whether a Scheduler entry predicted it (a manually-started playlist,
+    one triggered by an FPP Command/Event, a test run, ...). Schedule-based
+    prediction is still what lets arm_lead_seconds/disarm_lag_seconds do
+    anything, since there is no "before" for a start FPP didn't know about
+    in advance.
+    """
+    status = fpp_get_json(cfg, "/api/player/status")
+    return (status.get("current_playlist") or {}).get("playlist", "")
+
+
 def playlist_matches(cfg, name):
     watched = cfg.get("watched_playlists") or []
     if not watched:
