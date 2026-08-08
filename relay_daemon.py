@@ -5,11 +5,18 @@ GFCI Relay Control - primary daemon.
 Runs as its own systemd service (installed by scripts/fpp_install.sh),
 independent of fppd's own start/stop cycle. Polls FPP's public REST API
 for the configured schedule and arms/disarms the GFCI relay board's
-"show" relays to match. This is the primary arm/disarm mechanism; the
-fppd-side callbacks.py script is a faster-reacting backup only - if it
-never fires (or fppd's plugin-callback ABI changes out from under it in
-some future FPP release), shows are still protected within one poll
-interval.
+"show" relays to match, expanded by arm_lead_seconds/disarm_lag_seconds.
+This is the primary arm/disarm mechanism; the fppd-side callbacks.py
+script is a faster-reacting backup only (arm-on-start; it never disarms -
+see callbacks.py's docstring) - if it never fires, shows are still
+protected within one poll interval.
+
+Whenever a show requires the relays armed, this also confirms the board
+actually reports itself online with relays on (not just that the last
+arm command got a 2xx) and sends one alert if it doesn't - this is the
+plugin's only outbound notification. GFCI-trip notifications are the
+relay board's own job (its firmware has its own SMTP notifier); this
+plugin never stops a show or sends a trip alert.
 
 Deliberately stdlib-only: this process must keep working across FPP
 version upgrades that change the plugin-framework internals, so it does
@@ -22,6 +29,7 @@ import sys
 import time
 
 import gfci_common as gc
+import notify
 
 _running = True
 
@@ -74,15 +82,44 @@ def main():
 
     armed = None  # unknown until first successful poll
     last_playlist_check = 0.0
+    board_alert_sent = False
 
     while _running:
         cfg = gc.load_config()
         desired = compute_desired_armed(cfg, logger)
 
         if desired is not None and desired != armed:
+            logger.info(
+                "Desired armed state: %s -> %s (arm_lead_seconds=%s disarm_lag_seconds=%s)",
+                armed,
+                desired,
+                cfg.get("arm_lead_seconds", 0),
+                cfg.get("disarm_lag_seconds", 0),
+            )
             ok = gc.arm_board(cfg, logger) if desired else gc.disarm_board(cfg, logger)
             if ok:
                 armed = desired
+
+        # Confirm the board actually reflects "armed", not just that our
+        # last POST got a 2xx - this is what catches the board going
+        # unreachable (or a relay not actually energizing) sometime after
+        # that, including during the arm_lead_seconds window before a show.
+        board_confirmed = None
+        if desired:
+            board_confirmed = gc.board_confirmed_armed(cfg, logger)
+            if not board_confirmed and not board_alert_sent:
+                logger.warning("Show requires relays armed but board is not confirmed on")
+                notify.send_alert(
+                    cfg,
+                    logger,
+                    "GFCI Relay Control: a show needs the relays armed, but the "
+                    "relay board is not responding or not confirmed on.",
+                )
+                board_alert_sent = True
+            elif board_confirmed:
+                board_alert_sent = False
+        else:
+            board_alert_sent = False
 
         now_ts = time.time()
         if now_ts - last_playlist_check > 300:
@@ -92,6 +129,7 @@ def main():
         gc.write_state(
             {
                 "armed": armed,
+                "board_confirmed": board_confirmed,
                 "last_poll": datetime.datetime.now().isoformat(timespec="seconds"),
             }
         )

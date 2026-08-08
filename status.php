@@ -59,6 +59,16 @@ if (!empty($state['last_poll'])) {
                     <span class="text-danger">(<?php echo h($staleSecs); ?>s ago - daemon may be stuck or stopped)</span>
                 <?php endif; ?>
             </p>
+            <?php if (array_key_exists('board_confirmed', $state) && $state['board_confirmed'] !== null): ?>
+                <p>
+                    Board confirmed on:
+                    <?php if ($state['board_confirmed'] === true): ?>
+                        <span class="badge bg-success">yes</span>
+                    <?php else: ?>
+                        <span class="badge bg-danger">no - not responding or relay not actually on</span>
+                    <?php endif; ?>
+                </p>
+            <?php endif; ?>
         <?php endif; ?>
     </fieldset>
 

@@ -80,12 +80,43 @@ these.
 ## Board webhook contract (confirmed from firmware `FppClient.cpp`)
 
 The relay board POSTs `{"circuit": <int>, "name": "<string>"}` to
-`/plugin/gfci-relay-control/receive_trip.php` with a ~2s client timeout,
-*after* it has already called `/api/playlists/stop` itself. This plugin's
-job on trip is notification only, not stopping playback - the board does
-that directly. `receive_trip.php` responds immediately and dispatches
-`notify.py` in the background so it never risks hitting the board's
-timeout.
+`/plugin/gfci-relay-control/receive_trip.php` with a ~2s client timeout.
+`receive_trip.php` only records the trip for the Status page now - it does
+not send a notification (the board's own firmware notifier already does
+that) and never has stopped playback itself (the board's firmware currently
+calls `/api/playlists/stop` directly in `FppClient::notifyTrip()` - that is
+a firmware change, out of scope for this repo; see NOTES.md's "Alert
+redesign" entry below).
+
+## Alert redesign (after first live use)
+
+Originally this plugin also sent an SMS/push on every GFCI trip
+(`notify_trip()` in `notify.py`, called from `receive_trip.php`). Removed:
+the relay board's own firmware already has an SMTP notifier for trips
+(`Notifier.cpp` / `/api/notify/config` in the firmware), so FPP sending a
+second alert for the same event was redundant. `notify.py` is now a
+generic `send_alert(cfg, logger, message)` used for exactly one thing: the
+board-health check below. Kept it importable directly by `relay_daemon.py`
+(no more `receive_trip.php` shelling out to it) and still runnable
+stand-alone (`python3 notify.py --message "..."`) to test configured
+credentials.
+
+Whether the board's firmware should still call `/api/playlists/stop` on a
+trip is a firmware question (`FppClient.cpp`, a different project -
+`GFCI Mainboard`), not something this repo controls.
+
+## Board-armed health check (added after first live use)
+
+`relay_daemon.py` now confirms the board actually reports itself armed
+whenever a show needs it (`gfci_common.board_confirmed_armed()`: GET
+`/api/circuits`, require every entry's `online` and `relay` both true) -
+not just that the last `POST /api/show/start` returned 2xx. This is what
+catches the board going unreachable, or a relay not actually energizing,
+sometime after the daemon believed it had armed - including during the
+`arm_lead_seconds` window before a show, which is exactly the case that
+prompted this (relays were expected 5 minutes early and didn't confirm).
+One alert per incident (cleared once confirmed healthy again, or once the
+show no longer needs the relays armed), to avoid repeating every poll.
 
 ## Arm lead / disarm lag (added after first live install)
 

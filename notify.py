@@ -1,22 +1,27 @@
 #!/usr/bin/env python3
 """
-GFCI Relay Control - trip notification dispatch (ntfy / Twilio / Pushover).
+GFCI Relay Control - alert dispatch (ntfy / Twilio / Pushover).
 
-Invoked as a CLI by receive_trip.php in a fire-and-forget background
-process (the board POSTs the trip webhook with only a ~2s timeout, so the
-HTTP handler must not block on outbound SMS/push delivery).
+FPP does not send GFCI-trip notifications - the relay board's own firmware
+notifier already handles that. The one alert this plugin sends is
+relay_daemon.py's "a show needs the relays armed but the board isn't
+confirmed on" check (see relay_daemon.py's board_confirmed_armed handling).
+
+Also runnable as a CLI for testing configured credentials:
+  python3 notify.py --message "test"
 
 Stdlib-only, same reasoning as gfci_common.py.
 """
 import argparse
 import base64
-import json
 import sys
 import urllib.error
 import urllib.parse
 import urllib.request
 
 import gfci_common as gc
+
+TITLE = "GFCI Relay Control"
 
 
 def _post_form(url, fields, timeout, headers=None):
@@ -36,14 +41,14 @@ def send_ntfy(cfg, message, logger):
     req = urllib.request.Request(
         settings["topic_url"],
         data=message.encode("utf-8"),
-        headers={"Title": "GFCI Relay Control"},
+        headers={"Title": TITLE},
         method="POST",
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout):
-            logger.info("ntfy notification sent")
+            logger.info("ntfy alert sent")
     except (urllib.error.URLError, OSError) as e:
-        logger.warning("ntfy notification failed: %s", e)
+        logger.warning("ntfy alert failed: %s", e)
 
 
 def send_twilio(cfg, message, logger):
@@ -87,34 +92,32 @@ def send_pushover(cfg, message, logger):
                 "token": settings["app_token"],
                 "user": settings["user_key"],
                 "message": message,
-                "title": "GFCI Relay Control",
+                "title": TITLE,
             },
             cfg.get("http_timeout_seconds", 3),
         )
-        logger.info("Pushover notification sent")
+        logger.info("Pushover alert sent")
     except (urllib.error.URLError, OSError) as e:
-        logger.warning("Pushover notification failed: %s", e)
+        logger.warning("Pushover alert failed: %s", e)
 
 
-def notify_trip(cfg, logger, circuit, name):
-    message = "GFCI trip on circuit %s (%s) - show stopped" % (circuit, name)
+def send_alert(cfg, logger, message):
     send_ntfy(cfg, message, logger)
     send_twilio(cfg, message, logger)
     send_pushover(cfg, message, logger)
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--circuit", required=True)
-    parser.add_argument("--name", required=True)
+    parser = argparse.ArgumentParser(description="Send a test alert through configured channels")
+    parser.add_argument("--message", required=True)
     args = parser.parse_args()
 
     logger = gc.get_logger("notify")
     cfg = gc.load_config()
     try:
-        notify_trip(cfg, logger, args.circuit, args.name)
+        send_alert(cfg, logger, args.message)
     except Exception:  # noqa: BLE001
-        logger.exception("Unhandled error sending trip notifications")
+        logger.exception("Unhandled error sending alert")
     return 0
 
 

@@ -124,6 +124,28 @@ def disarm_board(cfg, logger):
     return _board_action(cfg, logger, "/api/show/stop", "disarm")
 
 
+def board_confirmed_armed(cfg, logger):
+    """True only if the board is reachable AND every circuit reports both
+    `online` and its relay actually on - not just that our last POST
+    /api/show/start got a 2xx. A 2xx only means the board accepted the
+    command; this is what lets relay_daemon.py notice the board went
+    unreachable (or a relay didn't actually energize) sometime after that.
+    """
+    url = _board_url(cfg, "/api/circuits")
+    if not url:
+        return False
+    timeout = cfg.get("http_timeout_seconds", 3)
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as resp:
+            circuits = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        logger.warning("Could not verify board state via %s: %s", url, e)
+        return False
+    if not circuits:
+        return False
+    return all(c.get("online") and c.get("relay") for c in circuits)
+
+
 def fpp_get_json(cfg, path):
     host = cfg.get("fpp_host", "127.0.0.1")
     timeout = cfg.get("http_timeout_seconds", 3)

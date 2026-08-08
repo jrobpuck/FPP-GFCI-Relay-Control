@@ -171,7 +171,8 @@ function h($s) {
         </fieldset>
 
         <fieldset class="border rounded p-2 mb-3">
-            <legend>Trip Notifications</legend>
+            <legend>Alerts</legend>
+            <p class="text-muted">Sent only when a show needs the relays armed but the relay board isn't confirmed on (unreachable, or a relay didn't actually energize). GFCI-trip alerts are the relay board's own job - it has its own notifier for that.</p>
 
             <div class="form-check mb-1">
                 <input type="checkbox" class="form-check-input" name="ntfy_enabled" id="ntfy_enabled" <?php echo $config['notify']['ntfy']['enabled'] ? 'checked' : ''; ?>>

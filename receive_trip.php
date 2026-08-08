@@ -3,10 +3,11 @@
  * GFCI Relay Control - trip webhook.
  *
  * The relay board POSTs here directly (see FppClient::notifyTrip() in the
- * board firmware) as soon as it has already called /api/playlists/stop
- * itself. This endpoint's only jobs are: record the trip, and kick off
- * notification delivery in the background - it must return fast, since the
- * board's HTTP client only waits ~2s.
+ * board firmware). This endpoint's only job is recording the trip for the
+ * Status page - it does not send a notification (the board's own firmware
+ * notifier already does that; see NOTES.md) and does not stop playback
+ * (also the board's job). It must still return fast, since the board's
+ * HTTP client only waits ~2s.
  *
  * Expected body: {"circuit": <int>, "name": "<string>"}
  */
@@ -15,7 +16,6 @@ header('Content-Type: application/json');
 
 $pluginDir = __DIR__;
 $tripsFile = $pluginDir . '/trips.json';
-$notifyScript = $pluginDir . '/notify.py';
 $logDir = getenv('LOGDIR') ?: '/home/fpp/media/logs';
 $logFile = $logDir . '/plugin-gfci-relay-control.log';
 
@@ -64,15 +64,5 @@ if ($fh !== false) {
 } else {
     gfci_log($logFile, "Could not open $tripsFile for writing");
 }
-
-// Fire-and-forget notification dispatch - do not block the HTTP response on
-// outbound SMS/push delivery.
-$cmd = sprintf(
-    'nohup python3 %s --circuit %s --name %s > /dev/null 2>&1 &',
-    escapeshellarg($notifyScript),
-    escapeshellarg((string) $circuit),
-    escapeshellarg($name)
-);
-exec($cmd);
 
 echo json_encode(['ok' => true]);
