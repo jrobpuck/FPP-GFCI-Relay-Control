@@ -118,6 +118,46 @@ prompted this (relays were expected 5 minutes early and didn't confirm).
 One alert per incident (cleared once confirmed healthy again, or once the
 show no longer needs the relays armed), to avoid repeating every poll.
 
+## `armed` never went true / lead didn't fire (found on second live test)
+
+`compute_desired_armed()` only ever asked "does `/api/schedule` predict a
+show right now" - it never checked whether FPP was actually playing
+anything. A playlist/sequence started manually (or via an FPP Command or
+Event, or any path that isn't a configured Scheduler entry) has no
+`/api/schedule` entry at all, so the daemon stayed at `armed: false` in
+`state.json` the entire time even while `callbacks.py`'s separate
+start-triggered hook correctly turned the relays on - looking from the
+Status page like the daemon was permanently stuck disarmed.
+
+Fixed by adding a second, independent signal: `GET /api/player/status`
+(`gfci_common.current_playlist_name()`), which reports what FPP is
+*actually* playing right now regardless of how it started.
+`compute_desired_armed()` now returns true if *either* the schedule
+predicts a matching show *or* FPP is actually playing a matching one; only
+returns `None` (meaning: don't change the current armed state) if both
+`/api/schedule` and `/api/player/status` were unreachable this poll, so a
+transient API hiccup can't flip an already-armed show back off.
+
+Important consequence: `arm_lead_seconds`/`disarm_lag_seconds` can only
+ever come from the `/api/schedule` branch - there is no "5 minutes before"
+for a start FPP didn't know about in advance. Testing lead/lag requires an
+actual FPP Scheduler entry (Status/Control -> Scheduler) with a real future
+start time, not a manually-started playlist/sequence. `relay_daemon.py`
+now logs `schedule_active`/`currently_playing` (and the lead/lag values it
+read) on every poll specifically so this is diagnosable from
+`plugin-gfci-relay-control.log` without guessing.
+
+`/api/player/status` (confirmed via `httpAPI.cpp`'s `GetCurrentFPPDStatus()`
+- the same status builder backs `/api/fppd/status` and `/api/player/status`
+in `openapi.json`) returns `current_playlist.playlist` as `""` when idle,
+otherwise the playing playlist's name - same field FPP's own UI uses.
+Also worth correcting from earlier notes: the "never call fppd's internal
+port :32322 directly" guideline is about the raw TCP port, not about
+avoiding URL paths that happen to contain `fppd` - `/api/fppd/status` is a
+normal documented HTTP path over the standard web port, same as
+`/api/player/status`. Used `/api/player/status` anyway since the name is
+unambiguous.
+
 ## Arm lead / disarm lag (added after first live install)
 
 `schedule_entry_active()` in `gfci_common.py` expands each schedule entry's

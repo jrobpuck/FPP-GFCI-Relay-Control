@@ -40,22 +40,56 @@ def _handle_sigterm(signum, frame):
 
 
 def compute_desired_armed(cfg, logger):
-    try:
-        schedule = gc.fpp_get_json(cfg, "/api/schedule")
-    except Exception as e:  # noqa: BLE001 - transient network/HTTP errors are routine here
-        logger.warning("Could not fetch /api/schedule: %s", e)
-        return None
+    """Armed if EITHER /api/schedule predicts a matching show right now
+    (the only source that knows about arm_lead_seconds/disarm_lag_seconds,
+    since only a Scheduler entry has a start time to be "before" or
+    "after"), OR FPP is actually playing a matching playlist right now
+    regardless of why (manually started, an FPP Command/Event, a test run,
+    ...). The second check is what makes "armed" track reality for
+    anything that didn't come from a Scheduler entry.
 
+    Returns None only if BOTH checks failed to reach FPP at all, so a
+    transient API hiccup doesn't flip an already-armed show back off.
+    """
     now = datetime.datetime.now()
     lead = cfg.get("arm_lead_seconds", 0)
     lag = cfg.get("disarm_lag_seconds", 0)
-    for entry in schedule:
-        playlist = entry.get("playlist", "")
-        if not gc.playlist_matches(cfg, playlist):
-            continue
-        if gc.schedule_entry_active(entry, now, lead, lag, logger):
-            return True
-    return False
+
+    schedule_reachable = True
+    schedule_active = False
+    try:
+        schedule = gc.fpp_get_json(cfg, "/api/schedule")
+        for entry in schedule:
+            playlist = entry.get("playlist", "")
+            if not gc.playlist_matches(cfg, playlist):
+                continue
+            if gc.schedule_entry_active(entry, now, lead, lag, logger):
+                schedule_active = True
+                break
+    except Exception as e:  # noqa: BLE001 - transient network/HTTP errors are routine here
+        logger.warning("Could not fetch /api/schedule: %s", e)
+        schedule_reachable = False
+
+    player_reachable = True
+    currently_playing = False
+    try:
+        name = gc.current_playlist_name(cfg)
+        currently_playing = bool(name) and gc.playlist_matches(cfg, name)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Could not fetch /api/player/status: %s", e)
+        player_reachable = False
+
+    logger.info(
+        "poll: schedule_active=%s currently_playing=%s (lead=%ss lag=%ss)",
+        schedule_active if schedule_reachable else "unreachable",
+        currently_playing if player_reachable else "unreachable",
+        lead,
+        lag,
+    )
+
+    if not schedule_reachable and not player_reachable:
+        return None
+    return schedule_active or currently_playing
 
 
 def check_watched_playlists_exist(cfg, logger):

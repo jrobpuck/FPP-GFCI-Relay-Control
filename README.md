@@ -17,14 +17,16 @@ based on.
 ## Architecture
 
 - **`relay_daemon.py`** - the primary mechanism. Runs as its own systemd
-  service (`gfci-relay-daemon`), independent of fppd's lifecycle. Polls
-  FPP's public REST API (`GET /api/schedule`, `GET /api/playlists`) and
-  calls the relay board's `POST /api/show/start` / `POST /api/show/stop`
-  to arm/disarm around the configured show schedule, expanded by
-  `arm_lead_seconds` before and `disarm_lag_seconds` after. Also confirms
-  (`GET /api/circuits`) the board actually reports itself armed whenever a
-  show needs it, and sends the plugin's one alert if it doesn't. Stdlib-only
-  - no pip installs, nothing that can break across an FPP OS/Python upgrade.
+  service (`gfci-relay-daemon`), independent of fppd's lifecycle. Arms
+  around a show if *either* `GET /api/schedule` predicts one right now
+  (expanded by `arm_lead_seconds`/`disarm_lag_seconds` - the only source
+  that has a start time to be "before" or "after") *or* `GET
+  /api/player/status` says FPP is actually playing a matching playlist
+  right now, however it started. Calls the relay board's `POST
+  /api/show/start` / `POST /api/show/stop` to arm/disarm, and confirms
+  (`GET /api/circuits`) the board actually reports itself armed, sending
+  the plugin's one alert if it doesn't. Stdlib-only - no pip installs,
+  nothing that can break across an FPP OS/Python upgrade.
 - **`callbacks.py`** - a fast-reacting backup, invoked directly by fppd via
   its script-plugin callback mechanism (see NOTES.md) on every playlist
   start. Only arms (never disarms - see the module docstring for why);
@@ -71,6 +73,24 @@ sudo chmod 664 /home/fpp/media/plugins/gfci-relay-control/{config,state,trips}.j
 content.php now surfaces a clear error (instead of silently discarding the
 save) if this happens again.
 
+### Status page stuck on "disarmed"?
+
+Fixed - `relay_daemon.py` used to only trust `/api/schedule`, so anything
+that wasn't a real Scheduler entry (a manually-started playlist, an FPP
+Command/Event, a test run) never registered as armed even while the relays
+were actually on. It now also checks `GET /api/player/status` for what FPP
+is really playing. See NOTES.md's "`armed` never went true" entry.
+
+### Arm-lead/disarm-lag not firing?
+
+Only `/api/schedule` entries have a start time to apply lead/lag to - a
+manually-started playlist/sequence has no "5 minutes before" to arm
+against. Test with a real FPP Scheduler entry (Status/Control ->
+Scheduler), not a manual play. `tail -f
+/home/fpp/media/logs/plugin-gfci-relay-control.log` for the
+`schedule_active`/`currently_playing`/lead/lag values the daemon read on
+each poll.
+
 ## Uninstall
 
 ```bash
@@ -82,15 +102,17 @@ sudo rm -rf /home/fpp/media/plugins/gfci-relay-control
 
 1. Run `install.sh` (or install via Plugin Manager), confirm no install-time errors.
 2. `systemctl status gfci-relay-daemon` - confirm it's running.
-3. `tail -f /home/fpp/media/logs/plugin-gfci-relay-control.log` while a
-   scheduled or manually-started playlist runs; confirm arm fires from both
-   `relay_daemon.py`'s poll loop (check the log line for the
-   `arm_lead_seconds`/`disarm_lag_seconds` values it actually read) and
-   `callbacks.py`, and disarm (respecting `disarm_lag_seconds`) fires from
-   `relay_daemon.py` only.
-4. Power off the relay board (or block its port) while a show is running
+3. Create a real Scheduler entry a few minutes out with `arm_lead_seconds`
+   set; `tail -f /home/fpp/media/logs/plugin-gfci-relay-control.log` and
+   confirm `schedule_active` flips true `arm_lead_seconds` before the
+   entry's start time, and disarm (respecting `disarm_lag_seconds`) fires
+   after it ends.
+4. Separately, manually start a watched playlist (no Scheduler entry) and
+   confirm `currently_playing` flips true and the Status page shows ARMED
+   - this is the fast path `callbacks.py` also covers.
+5. Power off the relay board (or block its port) while a show is running
    and confirm the board-not-responding alert arrives within one poll
    interval, and that Status page shows "Board confirmed on: no".
-5. Confirm the "Arm Relays"/"Disarm Relays" commands are selectable in a
+6. Confirm the "Arm Relays"/"Disarm Relays" commands are selectable in a
    playlist after install (this needs the one fppd restart that
    `fpp_install.sh` flags via `restartFlag`).
