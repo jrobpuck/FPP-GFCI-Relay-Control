@@ -37,9 +37,11 @@ based on.
   trip. Records the trip for the Status page only - it does not send a
   notification (the board's firmware already has its own) and does not
   stop playback.
-- **`notify.py`** - generic ntfy / Twilio SMS / Pushover dispatch, used
-  only by `relay_daemon.py`'s board-health alert. Also runnable stand-alone
-  to test configured credentials: `python3 notify.py --message "test"`.
+- **`notify.py`** - ntfy dispatch, used only by `relay_daemon.py`'s
+  board-health alert. Also runnable stand-alone to test the configured
+  topic: `python3 notify.py --message "test"` (prints `OK` or
+  `FAILED: <reason>`) - the settings page's "Send Test Alert" button
+  shells out to this same script.
 - **`content.php`** / **`status.php`** - the Content Setup settings page and
   status page, registered via `menu.inc`.
 - **`commands/`** - optional manual "Arm Relays" / "Disarm Relays" FPP

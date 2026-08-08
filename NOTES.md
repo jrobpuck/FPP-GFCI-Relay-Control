@@ -101,6 +101,16 @@ board-health check below. Kept it importable directly by `relay_daemon.py`
 stand-alone (`python3 notify.py --message "..."`) to test configured
 credentials.
 
+Simplified further afterward to ntfy-only, dropping Twilio/Pushover
+entirely (unused, more settings-page surface than the one alert needed).
+`send_ntfy()`/`send_alert()` now return `(ok, detail)` instead of just
+logging, so `content.php`'s "Send Test Alert" button can shell out to
+`notify.py` and show the real failure reason inline - useful since the
+board-health alert only fires on an actual board-not-responding condition,
+which isn't something to wait around for just to confirm ntfy delivery
+works. Old `config.json` files with leftover `twilio`/`pushover` keys are
+harmless - nothing reads them anymore.
+
 Whether the board's firmware should still call `/api/playlists/stop` on a
 trip is a firmware question (`FppClient.cpp`, a different project -
 `GFCI Mainboard`), not something this repo controls.

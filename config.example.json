@@ -8,14 +8,6 @@
     "disarm_lag_seconds": 0,
     "http_timeout_seconds": 3,
     "notify": {
-        "ntfy": { "enabled": false, "topic_url": "" },
-        "twilio": {
-            "enabled": false,
-            "account_sid": "",
-            "auth_token": "",
-            "from_number": "",
-            "to_number": ""
-        },
-        "pushover": { "enabled": false, "user_key": "", "app_token": "" }
+        "ntfy": { "enabled": false, "topic_url": "" }
     }
 }

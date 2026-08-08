@@ -29,14 +29,6 @@ DEFAULT_CONFIG = {
     "http_timeout_seconds": 3,
     "notify": {
         "ntfy": {"enabled": False, "topic_url": ""},
-        "twilio": {
-            "enabled": False,
-            "account_sid": "",
-            "auth_token": "",
-            "from_number": "",
-            "to_number": "",
-        },
-        "pushover": {"enabled": False, "user_key": "", "app_token": ""},
     },
 }
 
