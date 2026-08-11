@@ -14,10 +14,29 @@ import urllib.request
 import urllib.parse
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
-CONFIG_PATH = os.path.join(PLUGIN_DIR, "config.json")
-STATE_PATH = os.path.join(PLUGIN_DIR, "state.json")
-TRIPS_PATH = os.path.join(PLUGIN_DIR, "trips.json")
 REPO_NAME = "gfci-relay-control"
+
+# config.json/state.json/trips.json live under <mediadir>/plugindata/, NOT
+# in the plugin's own directory. A Plugin Manager update/reinstall deletes
+# the whole plugin directory and re-clones it from scratch (scripts/
+# uninstall_plugin runs fpp_uninstall.sh, then unconditionally removes the
+# directory) - anything stored inside it is destroyed on every update.
+# plugindata/ is the one location PLUGIN_GUIDELINES.md documents as
+# surviving that. See NOTES.md.
+MEDIA_DIR = os.environ.get("MEDIADIR", "/home/fpp/media")
+DATA_DIR = os.path.join(MEDIA_DIR, "plugindata", REPO_NAME)
+CONFIG_PATH = os.path.join(DATA_DIR, "config.json")
+STATE_PATH = os.path.join(DATA_DIR, "state.json")
+TRIPS_PATH = os.path.join(DATA_DIR, "trips.json")
+
+try:
+    os.makedirs(DATA_DIR, exist_ok=True)
+except OSError as e:
+    # Don't let a permissions problem here take the whole process down at
+    # import time - load_config() already falls back to in-memory defaults
+    # when DATA_DIR/config.json isn't there, and relay_daemon.py's write_state()
+    # call is wrapped in its own try/except for the same reason.
+    print("gfci_common: could not create %s: %s" % (DATA_DIR, e))
 
 DEFAULT_CONFIG = {
     "fpp_host": "127.0.0.1",

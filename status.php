@@ -4,17 +4,20 @@
  *
  * Shows relay_daemon.py's last known state (state.json, written every poll)
  * and the recent GFCI trip history (trips.json, appended by receive_trip.php).
- * Both files live in the plugin directory - see PLUGIN_GUIDELINES.md.
+ * Both live under <mediadir>/plugindata/gfci-relay-control/ (see
+ * gfci_paths.php), not the plugin's own directory - see NOTES.md.
  */
 
-$pluginDir = __DIR__;
+require_once __DIR__ . '/gfci_paths.php';
+
+$dataDir = gfci_data_dir();
 
 function h($s) {
     return htmlspecialchars((string) $s, ENT_QUOTES);
 }
 
 $state = [];
-$stateFile = $pluginDir . '/state.json';
+$stateFile = $dataDir . '/state.json';
 if (file_exists($stateFile)) {
     $decoded = json_decode(file_get_contents($stateFile), true);
     if (is_array($decoded)) {
@@ -23,7 +26,7 @@ if (file_exists($stateFile)) {
 }
 
 $trips = [];
-$tripsFile = $pluginDir . '/trips.json';
+$tripsFile = $dataDir . '/trips.json';
 if (file_exists($tripsFile)) {
     $decoded = json_decode(file_get_contents($tripsFile), true);
     if (is_array($decoded)) {

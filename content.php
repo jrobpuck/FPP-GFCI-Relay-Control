@@ -2,15 +2,17 @@
 /*
  * GFCI Relay Control - settings page (Content Setup menu).
  *
- * Reads/writes config.json directly in the plugin's own directory, per
- * PLUGIN_GUIDELINES.md ("config only within the plugin dir / config/plugin.
- * <repoName> / plugindata/"). This plugin uses the plugin-dir option since
+ * Reads/writes config.json under <mediadir>/plugindata/gfci-relay-control/
+ * (see gfci_paths.php) - NOT the plugin's own directory, which a Plugin
+ * Manager update/reinstall deletes and re-clones from scratch.
  * relay_daemon.py (a plain systemd-run Python process, not an fppd plugin
- * object) needs to read the same file directly.
+ * object) reads the exact same file via gfci_common.py's matching DATA_DIR.
  */
 
+require_once __DIR__ . '/gfci_paths.php';
+
 $pluginDir = __DIR__;
-$configFile = $pluginDir . '/config.json';
+$configFile = gfci_data_dir() . '/config.json';
 
 $defaultConfig = [
     'fpp_host' => '127.0.0.1',
@@ -64,9 +66,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     } else {
         $bytes = @file_put_contents($configFile, json_encode($config, JSON_PRETTY_PRINT));
         if ($bytes === false) {
-            $error = "Could not write $configFile - the web server user can't write to the plugin "
-                . "directory. On the FPP box, run: sudo chown -R fpp:fpp " . dirname($configFile)
-                . " && sudo chmod 664 $configFile";
+            $error = "Could not write $configFile - the web server user can't write there. "
+                . "On the FPP box, run: sudo chown -R fpp:fpp " . dirname($configFile)
+                . " && sudo chmod -R u+rwX,g+rwX " . dirname($configFile);
         } else {
             $saved = true;
         }

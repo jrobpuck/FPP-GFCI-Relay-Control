@@ -14,8 +14,9 @@
 
 header('Content-Type: application/json');
 
-$pluginDir = __DIR__;
-$tripsFile = $pluginDir . '/trips.json';
+require_once __DIR__ . '/gfci_paths.php';
+
+$tripsFile = gfci_data_dir() . '/trips.json';
 $logDir = getenv('LOGDIR') ?: '/home/fpp/media/logs';
 $logFile = $logDir . '/plugin-gfci-relay-control.log';
 

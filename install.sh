@@ -32,8 +32,10 @@ fi
 
 echo "Installing to ${TARGET_DIR} ..."
 mkdir -p "${TARGET_DIR}"
-rsync -a --exclude='.git' --exclude='config.json' --exclude='state.json' \
-    --exclude='trips.json' "${SRC_DIR}/" "${TARGET_DIR}/"
+# config.json/state.json/trips.json live under ${MEDIADIR}/plugindata/ (see
+# scripts/fpp_install.sh), never here, so there's nothing settings-related
+# for this sync to preserve or clobber.
+rsync -a --exclude='.git' "${SRC_DIR}/" "${TARGET_DIR}/"
 
 chown -R fpp:fpp "${TARGET_DIR}"
 

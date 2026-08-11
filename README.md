@@ -44,6 +44,11 @@ based on.
   shells out to this same script.
 - **`content.php`** / **`status.php`** - the Content Setup settings page and
   status page, registered via `menu.inc`.
+- **`gfci_paths.php`** / `gfci_common.py`'s `DATA_DIR` - both independently
+  compute `<mediadir>/plugindata/gfci-relay-control/`, where
+  `config.json`/`state.json`/`trips.json` actually live. Deliberately not
+  inside the plugin's own directory - see "Settings keep disappearing?"
+  below.
 - **`commands/`** - optional manual "Arm Relays" / "Disarm Relays" FPP
   Commands, callable from playlists, schedules, or Events.
 
@@ -60,20 +65,29 @@ Then in the FPP UI: **Content Setup -> GFCI Relay Control - Settings**, set
 the relay board's host/IP, the arm-lead/disarm-lag times, which playlists
 should arm the relays, and where the board-not-responding alert should go.
 
+### Settings keep disappearing after an update?
+
+Fixed - `config.json`/`state.json`/`trips.json` used to live inside the
+plugin's own directory, which a Plugin Manager update/reinstall deletes and
+re-clones from scratch, silently wiping every setting. They now live under
+`/home/fpp/media/plugindata/gfci-relay-control/`, which survives that. See
+NOTES.md's "config.json wiped on every plugin update" entry. If you hit
+this before the fix: just re-enter your settings once more after updating
+to a version that includes it - they'll stick from here on.
+
 ### Settings page not saving?
 
-`config.json`/`state.json`/`trips.json` need to be writable by whichever
-user runs FPP's web server (normally `fpp`). If the plugin was installed
-before this was fixed in `scripts/fpp_install.sh`, or the install ran as a
-different user, fix it directly on the FPP box:
+The files under `/home/fpp/media/plugindata/gfci-relay-control/` need to
+be writable by whichever user runs FPP's web server (normally `fpp`). Fix
+it directly on the FPP box:
 
 ```bash
-sudo chown fpp:fpp /home/fpp/media/plugins/gfci-relay-control/{config,state,trips}.json
-sudo chmod 664 /home/fpp/media/plugins/gfci-relay-control/{config,state,trips}.json
+sudo chown -R fpp:fpp /home/fpp/media/plugindata/gfci-relay-control
+sudo chmod -R u+rwX,g+rwX /home/fpp/media/plugindata/gfci-relay-control
 ```
 
-content.php now surfaces a clear error (instead of silently discarding the
-save) if this happens again.
+content.php surfaces a clear error (instead of silently discarding the
+save) if this happens.
 
 ### Status page stuck on "disarmed"?
 
@@ -100,6 +114,10 @@ sudo systemctl disable --now gfci-relay-daemon
 sudo rm -rf /home/fpp/media/plugins/gfci-relay-control
 ```
 
+This intentionally leaves `/home/fpp/media/plugindata/gfci-relay-control/`
+(your settings) in place, so a later reinstall picks up where you left
+off. Remove it too if you actually want the settings gone for good.
+
 ## Live-test checklist (v10 beta 2)
 
 1. Run `install.sh` (or install via Plugin Manager), confirm no install-time errors.
@@ -118,3 +136,5 @@ sudo rm -rf /home/fpp/media/plugins/gfci-relay-control
 6. Confirm the "Arm Relays"/"Disarm Relays" commands are selectable in a
    playlist after install (this needs the one fppd restart that
    `fpp_install.sh` flags via `restartFlag`).
+7. Update the plugin (Plugin Manager "Reinstall" or re-run `install.sh`)
+   and confirm settings are still there afterward.

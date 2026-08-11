@@ -164,13 +164,19 @@ def main():
             check_watched_playlists_exist(cfg, logger)
             last_playlist_check = now_ts
 
-        gc.write_state(
-            {
-                "armed": armed,
-                "board_confirmed": board_confirmed,
-                "last_poll": datetime.datetime.now().isoformat(timespec="seconds"),
-            }
-        )
+        try:
+            gc.write_state(
+                {
+                    "armed": armed,
+                    "board_confirmed": board_confirmed,
+                    "last_poll": datetime.datetime.now().isoformat(timespec="seconds"),
+                }
+            )
+        except OSError as e:
+            # state.json is informational (the Status page) only - arm/
+            # disarm above already happened regardless, so a write failure
+            # here should not crash the daemon into a restart loop.
+            logger.warning("Could not write state.json: %s", e)
 
         interval = cfg.get("poll_interval_seconds", 30)
         for _ in range(int(max(interval, 1))):

@@ -7,6 +7,39 @@ reading `FalconChristmas/fpp` @ `master` directly (`src/Plugins.cpp`,
 and the current `fpp-plugin-Template` repo, on 2026-08-05. Original
 open questions are answered inline.
 
+## config.json wiped on every plugin update (found 2026-08-10)
+
+`board_host` (and everything else in `config.json`) came back empty after
+what should have been an unrelated code update, breaking arm/disarm
+entirely (`board_host not configured, cannot arm/disarm relays` in the
+log). Root cause: `config.json`/`state.json`/`trips.json` were living
+inside the plugin's own directory
+(`/home/fpp/media/plugins/gfci-relay-control/`), and per
+`PLUGIN_GUIDELINES.md`'s install lifecycle, `scripts/uninstall_plugin` runs
+`fpp_uninstall.sh` and then **unconditionally deletes the whole plugin
+directory** - which is exactly what happens on every Plugin Manager
+update/reinstall, not just a real uninstall. Every push to this repo that
+reached the Pi via Plugin Manager was silently destroying the user's
+settings.
+
+Fixed by moving all three files to
+`<mediadir>/plugindata/gfci-relay-control/` - the location
+`PLUGIN_GUIDELINES.md` documents as surviving exactly this
+(`gfci_common.py`'s `DATA_DIR`, `gfci_paths.php`'s `gfci_data_dir()`, both
+independently computing the same path from `$MEDIADIR`/`getenv('MEDIADIR')`
+so there's one place per language, not one per file). `scripts/
+fpp_install.sh` migrates any files still sitting in the old plugin-dir
+location on first run after this fix (one-time, only fires if the
+directory hasn't already been wiped by a reinstall since); `scripts/
+fpp_uninstall.sh` deliberately does *not* remove `plugindata/` - that's the
+whole point of moving it there, since uninstall normally precedes a
+reinstall. This also happens to be a cleaner permission story: the daemon
+(systemd, `User=fpp`) and the web pages (also `fpp`, normally) each create
+these files themselves as `fpp` on first actual use now, rather than
+`fpp_install.sh` pre-seeding a file that might run as root depending on how
+the install was triggered - see the entry below for how that class of bug
+showed up before this fix existed.
+
 ## The old design's `addHookFunction()` / `fpp-plugin.php` does not exist
 
 There is no `addHookFunction()` API and no `PlaylistStarted`/`PlaylistFinished`

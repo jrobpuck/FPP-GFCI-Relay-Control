@@ -9,26 +9,45 @@ set -e
 # than through FPP's git-clone Plugin Manager flow.
 PLUGINDIR="$(cd "$(dirname "$0")/.." && pwd)"
 SERVICE_NAME="gfci-relay-daemon"
+MEDIADIR="${MEDIADIR:-/home/fpp/media}"
+DATADIR="${MEDIADIR}/plugindata/gfci-relay-control"
 
 . ${FPPDIR}/scripts/common
 
 chmod +x "$PLUGINDIR"/commands/*.sh
 chmod +x "$PLUGINDIR"/relay_daemon.py "$PLUGINDIR"/callbacks.py "$PLUGINDIR"/notify.py
 
-if [ ! -f "$PLUGINDIR/config.json" ]; then
-    cp "$PLUGINDIR/config.example.json" "$PLUGINDIR/config.json"
+# config.json/state.json/trips.json live under $DATADIR, NOT $PLUGINDIR:
+# scripts/uninstall_plugin runs fpp_uninstall.sh and then unconditionally
+# deletes the whole plugin directory, so anything left in $PLUGINDIR does
+# not survive a Plugin Manager update/reinstall. See NOTES.md.
+mkdir -p "$DATADIR"
+
+# One-time migration for anyone upgrading from before this fix - if the old
+# in-plugin-directory files are still here (this install hasn't been wiped
+# by a reinstall yet), move them over rather than losing the settings.
+for f in config state trips; do
+    old="$PLUGINDIR/$f.json"
+    new="$DATADIR/$f.json"
+    if [ -f "$old" ] && [ ! -f "$new" ]; then
+        mv "$old" "$new"
+    fi
+done
+
+if [ ! -f "$DATADIR/config.json" ]; then
+    cp "$PLUGINDIR/config.example.json" "$DATADIR/config.json"
 fi
-touch "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json"
+touch "$DATADIR/state.json" "$DATADIR/trips.json"
 
 # This script may run as root (Plugin Manager needs root for the systemd
 # unit below), but content.php and receive_trip.php are written to by
 # whatever user runs FPP's web server - usually 'fpp', not root. A
 # root-owned, mode-644 config.json is readable but not writable by that
 # user, which makes the settings page look like it silently ignores every
-# save. Fix ownership/mode on the files those pages actually write to,
-# regardless of which user this install script itself ran as.
-chown fpp:fpp "$PLUGINDIR/config.json" "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json" 2>/dev/null || true
-chmod 664 "$PLUGINDIR/config.json" "$PLUGINDIR/state.json" "$PLUGINDIR/trips.json"
+# save. Fix ownership/mode regardless of which user this install script
+# itself ran as.
+chown -R fpp:fpp "$DATADIR" 2>/dev/null || true
+chmod -R u+rwX,g+rwX "$DATADIR"
 
 cat > /etc/systemd/system/${SERVICE_NAME}.service <<EOF
 [Unit]
