@@ -24,6 +24,7 @@ $defaultConfig = [
     'notify' => [
         'ntfy' => ['enabled' => false, 'topic_url' => ''],
     ],
+    'website' => ['enabled' => false, 'url' => '', 'api_key' => ''],
 ];
 
 function gfci_load_config($file, $defaults) {
@@ -53,6 +54,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $config['notify']['ntfy']['enabled'] = isset($_POST['ntfy_enabled']);
     $config['notify']['ntfy']['topic_url'] = trim($_POST['ntfy_topic_url'] ?? '');
+
+    $config['website']['enabled'] = isset($_POST['website_enabled']);
+    $config['website']['url'] = trim($_POST['website_url'] ?? '');
+    $config['website']['api_key'] = trim($_POST['website_api_key'] ?? '');
 
     if ($config['board_host'] === '') {
         $error = 'Board host/IP is required.';
@@ -191,6 +196,24 @@ function h($s) {
                 <div class="form-text">The full subscribe URL for your topic - e.g. subscribe to it in the ntfy app, then paste that same URL here.</div>
             </div>
             <button type="submit" name="test_ntfy" value="1" class="btn btn-outline-secondary btn-sm">Send Test Alert</button>
+        </fieldset>
+
+        <fieldset class="border rounded p-3 mb-3">
+            <legend class="fs-6 fw-bold">Website Integration</legend>
+            <p class="text-muted">Reports the currently playing song/status to an external site.</p>
+
+            <div class="form-check form-switch mb-3">
+                <input type="checkbox" class="form-check-input" role="switch" id="website_enabled" name="website_enabled" <?php echo $config['website']['enabled'] ? 'checked' : ''; ?>>
+                <label class="form-check-label" for="website_enabled">Enable website reporting</label>
+            </div>
+            <div class="mb-3">
+                <label for="website_url" class="form-label">Update URL</label>
+                <input type="text" class="form-control" id="website_url" name="website_url" value="<?php echo h($config['website']['url']); ?>" placeholder="https://example.com/scripts/updateData.php">
+            </div>
+            <div class="mb-2">
+                <label for="website_api_key" class="form-label">API key</label>
+                <input type="password" class="form-control" id="website_api_key" name="website_api_key" value="<?php echo h($config['website']['api_key']); ?>" autocomplete="off">
+            </div>
         </fieldset>
 
         <button type="submit" class="btn btn-primary">Save</button>

@@ -31,6 +31,7 @@ DEFAULT_CONFIG = {
     "notify": {
         "ntfy": {"enabled": False, "topic_url": ""},
     },
+    "website": {"enabled": False, "url": "", "api_key": ""},
 }
 
 
@@ -254,7 +255,9 @@ def write_state(state):
         json.dump(state, f)
     os.replace(tmp, STATE_PATH)
 
+
 _last_reported = {"song": None, "status": None}
+
 
 def report_website_status(cfg, logger, song, status):
     website_cfg = cfg.get("website", {})
@@ -276,7 +279,12 @@ def report_website_status(cfg, logger, song, status):
         "status": status,  # "playing" | "idle" | "stopped"
     }).encode("utf-8")
 
-    request = urllib.request.Request(url, data=body, method="POST")
+    request = urllib.request.Request(
+        url,
+        data=body,
+        method="POST",
+        headers={"Content-Type": "application/x-www-form-urlencoded"},
+    )
     timeout = cfg.get("http_timeout_seconds", 3)
 
     try:
