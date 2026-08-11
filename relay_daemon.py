@@ -77,7 +77,7 @@ def compute_desired_armed(cfg, logger):
         name = gc.current_playlist_name(cfg)
         currently_playing = bool(name) and gc.playlist_matches(cfg, name)
     except Exception as e:  # noqa: BLE001
-        logger.warning("Could not fetch /api/player/status: %s", e)
+        logger.warning("Could not fetch /api/fppd/status: %s", e)
         player_reachable = False
 
     logger.info(

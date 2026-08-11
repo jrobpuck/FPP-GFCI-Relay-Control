@@ -21,7 +21,7 @@ based on.
   around a show if *either* `GET /api/schedule` predicts one right now
   (expanded by `arm_lead_seconds`/`disarm_lag_seconds` - the only source
   that has a start time to be "before" or "after") *or* `GET
-  /api/player/status` says FPP is actually playing a matching playlist
+  /api/fppd/status` says FPP is actually playing a matching playlist
   right now, however it started. Calls the relay board's `POST
   /api/show/start` / `POST /api/show/stop` to arm/disarm, and confirms
   (`GET /api/circuits`) the board actually reports itself armed, sending
@@ -80,7 +80,7 @@ save) if this happens again.
 Fixed - `relay_daemon.py` used to only trust `/api/schedule`, so anything
 that wasn't a real Scheduler entry (a manually-started playlist, an FPP
 Command/Event, a test run) never registered as armed even while the relays
-were actually on. It now also checks `GET /api/player/status` for what FPP
+were actually on. It now also checks `GET /api/fppd/status` for what FPP
 is really playing. See NOTES.md's "`armed` never went true" entry.
 
 ### Arm-lead/disarm-lag not firing?

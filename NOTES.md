@@ -139,13 +139,13 @@ Event, or any path that isn't a configured Scheduler entry) has no
 start-triggered hook correctly turned the relays on - looking from the
 Status page like the daemon was permanently stuck disarmed.
 
-Fixed by adding a second, independent signal: `GET /api/player/status`
+Fixed by adding a second, independent signal: `GET /api/fppd/status`
 (`gfci_common.current_playlist_name()`), which reports what FPP is
 *actually* playing right now regardless of how it started.
 `compute_desired_armed()` now returns true if *either* the schedule
 predicts a matching show *or* FPP is actually playing a matching one; only
 returns `None` (meaning: don't change the current armed state) if both
-`/api/schedule` and `/api/player/status` were unreachable this poll, so a
+`/api/schedule` and `/api/fppd/status` were unreachable this poll, so a
 transient API hiccup can't flip an already-armed show back off.
 
 Important consequence: `arm_lead_seconds`/`disarm_lag_seconds` can only
@@ -157,16 +157,19 @@ now logs `schedule_active`/`currently_playing` (and the lead/lag values it
 read) on every poll specifically so this is diagnosable from
 `plugin-gfci-relay-control.log` without guessing.
 
-`/api/player/status` (confirmed via `httpAPI.cpp`'s `GetCurrentFPPDStatus()`
-- the same status builder backs `/api/fppd/status` and `/api/player/status`
-in `openapi.json`) returns `current_playlist.playlist` as `""` when idle,
-otherwise the playing playlist's name - same field FPP's own UI uses.
+`/api/fppd/status` traces directly to real code: `PlayerResource::
+GetCurrentStatus()` -> `GetCurrentFPPDStatus()` (`httpAPI.cpp`) ->
+`Playlist::GetCurrentStatus()`, which sets `current_playlist.playlist` to
+`""` when idle or the playing playlist's name otherwise. This originally
+used `/api/player/status` instead, on the assumption it was an alias (same
+openapi.json description text, similarly-named) - that was never actually
+confirmed against a controller, and manual-playback testing showed it
+wasn't being detected, consistent with that endpoint either not existing
+or returning a different shape. Switched to the one actually traced.
 Also worth correcting from earlier notes: the "never call fppd's internal
 port :32322 directly" guideline is about the raw TCP port, not about
 avoiding URL paths that happen to contain `fppd` - `/api/fppd/status` is a
-normal documented HTTP path over the standard web port, same as
-`/api/player/status`. Used `/api/player/status` anyway since the name is
-unambiguous.
+normal documented HTTP path over the standard web port.
 
 ## Arm lead / disarm lag (added after first live install)
 
