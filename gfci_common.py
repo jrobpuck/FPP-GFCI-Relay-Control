@@ -11,6 +11,7 @@ import logging
 import os
 import urllib.error
 import urllib.request
+import urllib.parse
 
 PLUGIN_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(PLUGIN_DIR, "config.json")
@@ -252,3 +253,35 @@ def write_state(state):
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(state, f)
     os.replace(tmp, STATE_PATH)
+
+_last_reported = {"song": None, "status": None}
+
+def report_website_status(cfg, logger, song, status):
+    website_cfg = cfg.get("website", {})
+    if not website_cfg.get("enabled"):
+        return
+
+    # Throttle: only POST when something actually changed
+    if _last_reported["song"] == song and _last_reported["status"] == status:
+        return
+
+    url = website_cfg.get("url", "")
+    api_key = website_cfg.get("api_key", "")
+    if not url or not api_key:
+        return
+
+    body = urllib.parse.urlencode({
+        "apiKey": api_key,
+        "song": song or "",
+        "status": status,  # "playing" | "idle" | "stopped"
+    }).encode("utf-8")
+
+    request = urllib.request.Request(url, data=body, method="POST")
+    timeout = cfg.get("http_timeout_seconds", 3)
+
+    try:
+        urllib.request.urlopen(request, timeout=timeout)
+        _last_reported["song"] = song
+        _last_reported["status"] = status
+    except (urllib.error.URLError, OSError) as e:
+        logger.warning("Could not report status to website: %s", e)

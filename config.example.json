@@ -9,5 +9,10 @@
     "http_timeout_seconds": 3,
     "notify": {
         "ntfy": { "enabled": false, "topic_url": "" }
+    },
+    "website": {
+    "enabled": true,
+    "url": "https://lightingupleo.com/scripts/updateData.php",
+    "api_key": "REPLACE_WITH_API_KEY_FROM_ADMIN_PAGE"
     }
 }

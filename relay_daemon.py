@@ -72,6 +72,7 @@ def compute_desired_armed(cfg, logger):
 
     player_reachable = True
     currently_playing = False
+    name = ""
     try:
         name = gc.current_playlist_name(cfg)
         currently_playing = bool(name) and gc.playlist_matches(cfg, name)
@@ -86,6 +87,9 @@ def compute_desired_armed(cfg, logger):
         lead,
         lag,
     )
+
+    show_status = "playing" if currently_playing else ("idle" if schedule_active else "stopped")
+    gc.report_website_status(cfg, logger, name, show_status)   # <-- add this
 
     if not schedule_reachable and not player_reachable:
         return None
@@ -121,6 +125,8 @@ def main():
     while _running:
         cfg = gc.load_config()
         desired = compute_desired_armed(cfg, logger)
+
+        
 
         if desired is not None and desired != armed:
             logger.info(
