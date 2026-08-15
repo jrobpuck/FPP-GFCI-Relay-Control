@@ -7,6 +7,36 @@ reading `FalconChristmas/fpp` @ `master` directly (`src/Plugins.cpp`,
 and the current `fpp-plugin-Template` repo, on 2026-08-05. Original
 open questions are answered inline.
 
+## Website reporting moved from relay_daemon.py to callbacks.py, to carry the per-song note (2026-08-15)
+
+Wanted: report a playlist entry's user-set "note" (the per-song label set
+in the FPP playlist editor) to the website, not just the raw mp3 filename.
+Traced where "note" actually lives: `PlaylistEntryBase::GetConfig()` sets
+`result["note"] = m_note`, and `Playlist::GetCurrentEntry()` (called from
+`Playlist::GetInfo()` as `result["currentEntry"]`) returns exactly that
+entry's `GetConfig()`. `/api/fppd/status` - what `relay_daemon.py` polls
+for arm/disarm - is built from the *different* `Playlist::GetCurrentStatus()`
+method, which sets flat fields (`current_song`, `current_sequence`, etc.)
+and does not include `note` anywhere. So polling can never see it.
+
+The plugin-callback JSON payload `callbacks.py` receives, however, *is*
+`Playlist::GetInfo()`'s output (`PluginManager::playlistCallback(GetInfo(),
+action, ...)` - confirmed at every call site in `Playlist.cpp`) - it
+already carries `currentEntry.note`. Also useful: fppd fires the
+`"playing"` action on every song change *within* a playlist, not just once
+at playlist start (multiple call sites in `Playlist.cpp` tied to advancing
+to a new section item) - so `callbacks.py` naturally gets one event per
+song, which is exactly the granularity website reporting needs.
+
+Moved `report_website_status()` calls out of `relay_daemon.py`'s poll loop
+entirely and into `callbacks.py`'s `handle_playlist()`: reports
+`currentEntry.note` (falling back to `mediaName`/`mediaFilename` when no
+note is set) on `"start"`/`"playing"`, and an empty/`"stopped"` report on
+`"stop"`. Deliberately not left running in both places - `relay_daemon.py`
+only ever had the raw filename available, so both sources reporting on the
+same throttled field would have flip-flopped the website between the
+accurate label and the worse one every poll interval.
+
 ## Plugin Manager "Update" never actually restarted the daemon (found 2026-08-15)
 
 "Update" in the FPP UI correctly recognized new commits were available and

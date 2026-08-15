@@ -184,19 +184,15 @@ def current_status(cfg):
     alone, never confirmed, and manual playback testing showed it wasn't
     being detected.
 
-    Relevant fields (from Playlist::GetCurrentStatus()), both "" when idle:
-      current_playlist.playlist - the playlist name (arm/disarm matching)
-      current_song              - the playing media/song's filename
+    Relevant field: current_playlist.playlist (the playlist name, used for
+    arm/disarm matching via current_playlist_name() below), "" when idle.
+    Note there is no per-song info here - see callbacks.py for that.
     """
     return fpp_get_json(cfg, "/api/fppd/status")
 
 
 def current_playlist_name(status):
     return (status.get("current_playlist") or {}).get("playlist", "")
-
-
-def current_song_name(status):
-    return status.get("current_song", "")
 
 
 def playlist_matches(cfg, name):

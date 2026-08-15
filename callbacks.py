@@ -28,6 +28,17 @@ disarm_lag_seconds does: only the daemon's schedule-window check knows
 whether the configured lag means the relays should stay armed past this
 playlist's stop, so a callback-side disarm here would race it and cut the
 lag short.
+
+This is also the ONLY place website reporting can include a per-song note:
+fppd fires "playing" on every song change within a playlist (not just once
+at playlist start), and the JSON payload's currentEntry carries whatever
+note was set on that playlist entry (Playlist::GetCurrentEntry() ->
+PlaylistEntryBase::GetConfig()'s "note" field) - /api/fppd/status, which
+relay_daemon.py polls for arm/disarm, does not expose it. relay_daemon.py
+deliberately does not also report website status on its own poll loop:
+it would only ever have the raw filename (no note), and two sources
+racing to set the same field would just flip-flop the website between the
+accurate label and the worse one every poll interval. See NOTES.md.
 """
 import json
 import sys
@@ -46,14 +57,23 @@ def handle_playlist(logger, data_arg):
 
     action = data.get("Action", "")
     name = data.get("name", "")
-    if action != "start":
-        return  # "stop" is relay_daemon.py's call (disarm_lag_seconds); see module docstring
-
     cfg = gc.load_config()
-    if not gc.playlist_matches(cfg, name):
-        return
+    matches = gc.playlist_matches(cfg, name)
 
-    gc.arm_board(cfg, logger)
+    # Arm fast-path: only on "start" - "stop"/disarm is relay_daemon.py's
+    # call (disarm_lag_seconds); see module docstring.
+    if action == "start" and matches:
+        gc.arm_board(cfg, logger)
+
+    # Website reporting - see module docstring for why this, not
+    # relay_daemon.py, is the source of truth for this.
+    if action in ("start", "playing") and matches:
+        entry = data.get("currentEntry") or {}
+        note = entry.get("note", "")
+        label = note or entry.get("mediaName") or entry.get("mediaFilename") or ""
+        gc.report_website_status(cfg, logger, label, "playing")
+    elif action == "stop":
+        gc.report_website_status(cfg, logger, "", "stopped")
 
 
 def handle_lifecycle(logger, lifecycle):
