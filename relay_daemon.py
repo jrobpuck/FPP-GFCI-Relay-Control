@@ -72,10 +72,12 @@ def compute_desired_armed(cfg, logger):
 
     player_reachable = True
     currently_playing = False
-    name = ""
+    song = ""
     try:
-        name = gc.current_playlist_name(cfg)
-        currently_playing = bool(name) and gc.playlist_matches(cfg, name)
+        status = gc.current_status(cfg)
+        playlist = gc.current_playlist_name(status)
+        song = gc.current_song_name(status)
+        currently_playing = bool(playlist) and gc.playlist_matches(cfg, playlist)
     except Exception as e:  # noqa: BLE001
         logger.warning("Could not fetch /api/fppd/status: %s", e)
         player_reachable = False
@@ -89,7 +91,7 @@ def compute_desired_armed(cfg, logger):
     )
 
     show_status = "playing" if currently_playing else ("idle" if schedule_active else "stopped")
-    gc.report_website_status(cfg, logger, name, show_status)
+    gc.report_website_status(cfg, logger, song, show_status)
 
     if not schedule_reachable and not player_reachable:
         return None

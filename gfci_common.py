@@ -167,26 +167,36 @@ def fpp_get_json(cfg, path):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def current_playlist_name(cfg):
-    """The playlist FPP is actually playing right now ("" if idle), via
-    GET /api/fppd/status. This is a real-time signal independent of
-    /api/schedule - it catches anything FPP is playing regardless of
-    whether a Scheduler entry predicted it (a manually-started playlist,
-    one triggered by an FPP Command/Event, a test run, ...). Schedule-based
-    prediction is still what lets arm_lead_seconds/disarm_lag_seconds do
-    anything, since there is no "before" for a start FPP didn't know about
-    in advance.
+def current_status(cfg):
+    """Raw GET /api/fppd/status response. This is a real-time signal
+    independent of /api/schedule - it catches anything FPP is playing
+    regardless of whether a Scheduler entry predicted it (a manually-started
+    playlist, one triggered by an FPP Command/Event, a test run, ...).
+    Schedule-based prediction is still what lets arm_lead_seconds/
+    disarm_lag_seconds do anything, since there is no "before" for a start
+    FPP didn't know about in advance.
 
     Uses /api/fppd/status specifically (not /api/player/status, which this
     used at first): only /api/fppd/status was actually traceable to real
     code (PlayerResource::GetCurrentStatus() -> GetCurrentFPPDStatus() ->
-    Playlist::GetCurrentStatus(), which sets current_playlist.playlist) -
-    see NOTES.md. /api/player/status's shape was inferred by analogy from
-    openapi.json's description text alone, never confirmed, and manual
-    playback testing showed it wasn't being detected.
+    Playlist::GetCurrentStatus()) - see NOTES.md. /api/player/status's
+    shape was inferred by analogy from openapi.json's description text
+    alone, never confirmed, and manual playback testing showed it wasn't
+    being detected.
+
+    Relevant fields (from Playlist::GetCurrentStatus()), both "" when idle:
+      current_playlist.playlist - the playlist name (arm/disarm matching)
+      current_song              - the playing media/song's filename
     """
-    status = fpp_get_json(cfg, "/api/fppd/status")
+    return fpp_get_json(cfg, "/api/fppd/status")
+
+
+def current_playlist_name(status):
     return (status.get("current_playlist") or {}).get("playlist", "")
+
+
+def current_song_name(status):
+    return status.get("current_song", "")
 
 
 def playlist_matches(cfg, name):

@@ -7,6 +7,19 @@ reading `FalconChristmas/fpp` @ `master` directly (`src/Plugins.cpp`,
 and the current `fpp-plugin-Template` repo, on 2026-08-05. Original
 open questions are answered inline.
 
+## Website integration reported the playlist name, not the song (found 2026-08-15)
+
+`relay_daemon.py` was passing `current_playlist_name()`'s result (the
+*playlist*, e.g. "Main Show") into `report_website_status()`'s `song`
+parameter. `Playlist::GetCurrentStatus()` (see below) actually exposes the
+playing media/song's filename as a separate top-level `current_song` field,
+sibling to `current_playlist`, not nested under it. `gfci_common.py`'s
+single-status-fetch helper was split into `current_status(cfg)` (the raw
+`GET /api/fppd/status` response) plus two small extractors -
+`current_playlist_name(status)` for arm/disarm matching and
+`current_song_name(status)` for what actually gets reported to the
+website - both pulled from one fetch rather than two.
+
 ## config.json wiped on every plugin update (found 2026-08-10)
 
 `board_host` (and everything else in `config.json`) came back empty after
