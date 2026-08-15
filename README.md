@@ -65,6 +65,18 @@ Then in the FPP UI: **Content Setup -> GFCI Relay Control - Settings**, set
 the relay board's host/IP, the arm-lead/disarm-lag times, which playlists
 should arm the relays, and where the board-not-responding alert should go.
 
+### Clicking "Update" in Plugin Manager doesn't seem to do anything?
+
+Fixed - `fpp_install.sh` (which re-runs after every update, not just a
+fresh install) used to end with `systemctl enable --now gfci-relay-daemon`,
+but `--now` only starts a unit that isn't already running. Since the
+daemon was already running, updates pulled new code to disk while the
+already-running process kept executing the old code from memory - only a
+full Uninstall+reinstall actually restarted it. Now ends with `enable` +
+an unconditional `restart`, so "Update" alone is enough. If you're on an
+older install: one Uninstall+reinstall after picking up this fix is enough
+to get onto the corrected `fpp_install.sh` - after that, plain updates work.
+
 ### Settings keep disappearing after an update?
 
 Fixed - `config.json`/`state.json`/`trips.json` used to live inside the

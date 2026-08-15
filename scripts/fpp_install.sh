@@ -67,7 +67,15 @@ WantedBy=multi-user.target
 EOF
 
 systemctl daemon-reload
-systemctl enable --now ${SERVICE_NAME}
+systemctl enable ${SERVICE_NAME}
+# `restart` (not `enable --now`): --now only starts the unit if it isn't
+# already running, which is a no-op on every update/reinstall after the
+# first install - relay_daemon.py is a long-running process, so the
+# already-running one just keeps executing the OLD code from before this
+# script's git pull replaced the file on disk. `restart` always stops (if
+# running) then starts, so an update actually takes effect without the
+# user having to uninstall/reinstall to force a fresh process.
+systemctl restart ${SERVICE_NAME}
 
 # fppd only reads commands/descriptions.json at its own startup
 # (PluginManager::loadUserPlugins(), src/Plugins.cpp), never on

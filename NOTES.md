@@ -7,6 +7,34 @@ reading `FalconChristmas/fpp` @ `master` directly (`src/Plugins.cpp`,
 and the current `fpp-plugin-Template` repo, on 2026-08-05. Original
 open questions are answered inline.
 
+## Plugin Manager "Update" never actually restarted the daemon (found 2026-08-15)
+
+"Update" in the FPP UI correctly recognized new commits were available and
+pulled them (confirmed via `scripts/upgrade_plugin`'s server-side `git
+fetch`/pull, which self-heals a dirty tree from our own `chmod +x` calls
+via `git config core.fileMode false` + a `reset --hard`/`clean -fd`
+recovery path if a plain pull fails - see that script's own
+"bug-upgrade-silent-noop" comment), but `relay_daemon.py` kept running the
+pre-update code regardless. Only a full Uninstall+reinstall fixed it.
+
+Root cause: since this plugin ships no `scripts/fpp_upgrade.sh`,
+`upgrade_plugin` falls back to re-running `scripts/fpp_install.sh` after
+every pull (confirmed from that script's `post_pull_script` resolution
+order). `fpp_install.sh` ended with `systemctl enable --now
+gfci-relay-daemon` - but `--now` only *starts* a unit that isn't already
+running; on an update, the unit is already active, so it's a no-op there.
+`relay_daemon.py` is a long-running process (not re-executed per request
+like the PHP pages or `callbacks.py`), so the already-running instance just
+kept its old code loaded in memory even though the file on disk was
+current. A full Uninstall stops the service explicitly before deleting the
+directory, and reinstall starts it fresh - which is why only that combination
+ever actually picked up new code.
+
+Fixed: `enable` (register for boot) followed by an unconditional `restart`
+(stop-if-running, then start) instead of `enable --now`, so every install
+*and* every update leaves a freshly-started process regardless of whether
+one was already running.
+
 ## Website integration reported the playlist name, not the song (found 2026-08-15)
 
 `relay_daemon.py` was passing `current_playlist_name()`'s result (the
