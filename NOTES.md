@@ -7,6 +7,32 @@ reading `FalconChristmas/fpp` @ `master` directly (`src/Plugins.cpp`,
 and the current `fpp-plugin-Template` repo, on 2026-08-05. Original
 open questions are answered inline.
 
+## Website reporting also sends the scheduled start/end (2026-08-16)
+
+Wanted: report the scheduled playlist's start/end time to the website
+too, when one applies. `gfci_common.schedule_entry_active()` (used by
+relay_daemon.py's arm/disarm decision) only ever returned a bool -
+refactored its window-matching logic into `_matching_window()`, returning
+the entry's actual `(start_dt, end_dt)` (not expanded by
+arm_lead_seconds/disarm_lag_seconds - those change when relays energize,
+not the show's advertised time), with `schedule_entry_active()` now a
+thin `is not None` wrapper around it so its existing behavior/callers are
+unaffected.
+
+Added `gfci_common.find_scheduled_window(cfg, playlist_name, logger)` on
+top of that: fetches `/api/schedule` and returns whichever entry matching
+`playlist_name` is active right now, or `None` if this playlist isn't
+currently being driven by a Scheduler entry at all (started manually, via
+a Command/Event, ...) - `report_website_status()` sends `""` for both
+`scheduledStart`/`scheduledEnd` in that case.
+
+Called from `callbacks.py`, not `relay_daemon.py` - same reasoning as the
+per-song note below: keeping exactly one source reporting website status
+avoids two pollers/callbacks racing to set the same throttled fields.
+`callbacks.py` already looks up the schedule for nothing else, so this
+costs one extra `/api/schedule` fetch per song-change event (a few times
+an hour during a show, not a poll-loop, so not a real cost).
+
 ## Website reporting moved from relay_daemon.py to callbacks.py, to carry the per-song note (2026-08-15)
 
 Wanted: report a playlist entry's user-set "note" (the per-song label set

@@ -239,9 +239,11 @@ def _parse_time(s):
     return datetime.datetime.strptime(s, "%H:%M:%S").time()
 
 
-def schedule_entry_active(entry, now, lead_seconds=0, lag_seconds=0, logger=None):
-    """Return True if this /api/schedule entry - expanded by arm_lead_seconds
-    before its start and disarm_lag_seconds after its end - covers `now`.
+def _matching_window(entry, now, lead_seconds, lag_seconds, logger=None):
+    """The (start_dt, end_dt) - the entry's actual configured times, NOT
+    expanded by lead/lag - for whichever occurrence of this /api/schedule
+    entry covers `now` once expanded by arm_lead_seconds/disarm_lag_seconds.
+    None if the entry doesn't cover `now` at all (even with lead/lag).
 
     Works in full datetimes rather than time-of-day comparisons so a lead
     time pulling the window into the previous day, an overnight show, and a
@@ -250,7 +252,7 @@ def schedule_entry_active(entry, now, lead_seconds=0, lag_seconds=0, logger=None
     """
     try:
         if not entry.get("enabled"):
-            return False
+            return None
         start_date = _parse_date(entry["startDate"])
         end_date = _parse_date(entry["endDate"])
         start_t = _parse_time(entry["startTime"])
@@ -274,12 +276,42 @@ def schedule_entry_active(entry, now, lead_seconds=0, lag_seconds=0, logger=None
             if end_dt <= start_dt:
                 end_dt += datetime.timedelta(days=1)  # overnight show
             if (start_dt - lead) <= now < (end_dt + lag):
-                return True
-        return False
+                return (start_dt, end_dt)
+        return None
     except (KeyError, ValueError) as e:
         if logger:
             logger.warning("Skipping unparseable schedule entry %r: %s", entry, e)
-        return False
+        return None
+
+
+def schedule_entry_active(entry, now, lead_seconds=0, lag_seconds=0, logger=None):
+    """Return True if this /api/schedule entry - expanded by arm_lead_seconds
+    before its start and disarm_lag_seconds after its end - covers `now`."""
+    return _matching_window(entry, now, lead_seconds, lag_seconds, logger) is not None
+
+
+def find_scheduled_window(cfg, playlist_name, logger=None):
+    """The (start_dt, end_dt) of whichever /api/schedule entry for
+    `playlist_name` is active right now, using the entry's own configured
+    times (NOT expanded by arm_lead_seconds/disarm_lag_seconds - those only
+    change when relays energize, not the show's advertised time). None if
+    there's no currently-active Scheduler entry for this playlist (e.g. it
+    was started manually with nothing scheduled).
+    """
+    try:
+        schedule = fpp_get_json(cfg, "/api/schedule")
+    except (urllib.error.URLError, OSError, ValueError) as e:
+        if logger:
+            logger.warning("Could not fetch /api/schedule: %s", e)
+        return None
+    now = datetime.datetime.now()
+    for entry in schedule:
+        if entry.get("playlist", "") != playlist_name:
+            continue
+        window = _matching_window(entry, now, 0, 0, logger)
+        if window:
+            return window
+    return None
 
 
 def write_state(state):
@@ -289,16 +321,26 @@ def write_state(state):
     os.replace(tmp, STATE_PATH)
 
 
-_last_reported = {"song": None, "status": None}
+_last_reported = {"song": None, "status": None, "start": None, "end": None}
 
 
-def report_website_status(cfg, logger, song, status):
+def report_website_status(cfg, logger, song, status, scheduled_start=None, scheduled_end=None):
+    """scheduled_start/scheduled_end are datetimes (from find_scheduled_window())
+    or None when the current playlist has no active Scheduler entry."""
     website_cfg = cfg.get("website", {})
     if not website_cfg.get("enabled"):
         return
 
+    start_iso = scheduled_start.isoformat(timespec="seconds") if scheduled_start else ""
+    end_iso = scheduled_end.isoformat(timespec="seconds") if scheduled_end else ""
+
     # Throttle: only POST when something actually changed
-    if _last_reported["song"] == song and _last_reported["status"] == status:
+    if (
+        _last_reported["song"] == song
+        and _last_reported["status"] == status
+        and _last_reported["start"] == start_iso
+        and _last_reported["end"] == end_iso
+    ):
         return
 
     url = website_cfg.get("url", "")
@@ -310,6 +352,8 @@ def report_website_status(cfg, logger, song, status):
         "apiKey": api_key,
         "song": song or "",
         "status": status,  # "playing" | "idle" | "stopped"
+        "scheduledStart": start_iso,
+        "scheduledEnd": end_iso,
     }).encode("utf-8")
 
     request = urllib.request.Request(
@@ -324,5 +368,7 @@ def report_website_status(cfg, logger, song, status):
         urllib.request.urlopen(request, timeout=timeout)
         _last_reported["song"] = song
         _last_reported["status"] = status
+        _last_reported["start"] = start_iso
+        _last_reported["end"] = end_iso
     except (urllib.error.URLError, OSError) as e:
         logger.warning("Could not report status to website: %s", e)

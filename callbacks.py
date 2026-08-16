@@ -39,6 +39,11 @@ deliberately does not also report website status on its own poll loop:
 it would only ever have the raw filename (no note), and two sources
 racing to set the same field would just flip-flop the website between the
 accurate label and the worse one every poll interval. See NOTES.md.
+
+Also looks up the matching /api/schedule entry (gc.find_scheduled_window())
+to report its configured start/end alongside the song - None/None if this
+playlist isn't currently being driven by a Scheduler entry at all (started
+manually, via a Command/Event, ...).
 """
 import json
 import sys
@@ -71,7 +76,12 @@ def handle_playlist(logger, data_arg):
         entry = data.get("currentEntry") or {}
         note = entry.get("note", "")
         label = note or entry.get("mediaName") or entry.get("mediaFilename") or ""
-        gc.report_website_status(cfg, logger, label, "playing")
+        # None/None when nothing in /api/schedule is actually driving this
+        # playlist right now (started manually, via a Command/Event, ...) -
+        # there's no scheduled start/end to report in that case.
+        window = gc.find_scheduled_window(cfg, name, logger)
+        start, end = window if window else (None, None)
+        gc.report_website_status(cfg, logger, label, "playing", start, end)
     elif action == "stop":
         gc.report_website_status(cfg, logger, "", "stopped")
 
